@@ -30,9 +30,14 @@ public class Server {
     public void start() {
         try {
             // TODO: figure out steps to complete and write code to complete them
+            System.out.println("hello from server");
         } catch (Exception e) {
             System.err.println("failed to start server: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    public void stop() {
+       return;
     }
 }
