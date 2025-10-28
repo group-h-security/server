@@ -16,5 +16,23 @@ public class Server {
     private static final String KEYSTORE_PASSWORD = "serverpass";
     private static final String TRUSTSTORE_PASSWORD = "serverpass";
 
-    
+    private SSLServerSocket serverSocket;
+    // today i learned volatile is a way to mark a variable as stored in main memory
+    // not just in a threads local cache
+    private volatile boolean running;
+
+    // we start the server when constructed
+    public Server() {
+        start();
+    }
+
+    // set up all security components for mTLS
+    public void start() {
+        try {
+            // TODO: figure out steps to complete and write code to complete them
+        } catch (Exception e) {
+            System.err.println("failed to start server: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 }
