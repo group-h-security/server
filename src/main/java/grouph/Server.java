@@ -84,12 +84,39 @@ public class Server {
                 """, PORT
             );
 
+            while(running) {
+                try {
+                    // accept client connect
+                    // connect fails on invalid certificate
+                    assert serverSocket != null; // avoid NullPointerException
+                    SSLSocket clientSocket = (SSLSocket) serverSocket.accept();
+                    System.out.printf("client connected from: %s\n", clientSocket.getInetAddress());
+
+                    // force TLS handshake
+                    clientSocket.setUseClientMode(false);
+                    clientSocket.startHandshake(); // mTLS enforced
+
+                    System.out.println("client authenticated successfully :)");
+
+                    // simple echo, echo back anything client says
+                    handleClient(clientSocket);
+                } catch (SSLHandshakeException e) {
+                    System.err.println("handshake failed" + e.getMessage());
+                } catch (IOException e) {
+                    System.err.println("io error: " + e.getMessage());
+                }
+            }
 
 
         } catch (Exception e) {
             System.err.println("failed to start server: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private void handleClient(SSLSocket clientSocket) {
+        // TODOOO:
+        return;
     }
 
     public void stop() {
