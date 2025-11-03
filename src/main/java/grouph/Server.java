@@ -1,5 +1,6 @@
 package grouph;
 
+import javax.management.monitor.StringMonitor;
 import javax.net.ssl.*;
 import java.io.*;
 import java.security.*;
@@ -106,20 +107,46 @@ public class Server {
                     System.err.println("io error: " + e.getMessage());
                 }
             }
-
-
         } catch (Exception e) {
             System.err.println("failed to start server: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
+    // read messages and echo them back
     private void handleClient(SSLSocket clientSocket) {
-        // TODOOO:
-        return;
+        try(BufferedReader in = new BufferedReader(
+            new InputStreamReader(clientSocket.getInputStream()));
+            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
+
+            System.out.println("echo: type messages to test connection");
+
+            String message;
+            while((message = in.readLine()) != null) {
+                System.out.printf("recieved: %s\n", message);
+                if(message.equals("QUIT")) {
+                    out.printf("BYE\n");
+                    System.out.println("client disconnected");
+                    break;
+                }
+
+                // echo message back
+                out.printf("ECHO: %s\n", message);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void stop() {
-       return;
+        running = false;
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+                System.out.println("Server stopped");
+            }
+        } catch (IOException e) {
+            System.err.println("Error stopping server: " + e.getMessage());
+        }
     }
 }
