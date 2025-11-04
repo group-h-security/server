@@ -162,6 +162,21 @@ public class Packet {
         return this;
     }
 
+    public String getStr(int type) {
+        for (Tlv t : tlvs) if (t.type == type) return t.asStr();
+        return null;
+    }
+
+    public Long getU32(int type) {
+        for (Tlv t : tlvs) if (t.type == type) return t.asU32();
+        return null;
+    }
+
+    public Long getU64(int type) {
+        for (Tlv t : tlvs) if (t.type == type) return t.asU64();
+        return null;
+    }
+
     // TLV subclass
     public static final class Tlv {
         // this should be a short, 16 bit unsigned
