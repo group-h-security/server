@@ -14,10 +14,14 @@ package proto;
 // LEAVE: obvious -> 0x05
 // HEARTBEAT_ACK: acknowledge the server -> 0x01
 
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 // ill put these in an interface called Op
@@ -33,7 +37,129 @@ public class Packet {
 
     // encoding, we should be able to serialise a packet into a byte array ready to write to a socket
     public byte[] toBytes() {
+        // for each tlv, calc size, adds all lengths up
+        int payloadLen = tlvs.stream().mapToInt(Tlv::size).sum();
 
+        // because bytebuffers are easy to deal with
+        ByteBuffer buf = ByteBuffer.allocate(HEADER_SIZE + payloadLen).order(ByteOrder.BIG_ENDIAN);
+
+        // now to create our packet we put header, version, opcode, and payload length
+        buf.putInt(MAGIC);         // CHAT
+        buf.put(version);          // 1
+        buf.put(opcode);           // anything in Op
+        buf.putShort((short)0);    // reserved, alignment, was told this is good idea
+        buf.putInt(payloadLen);    // payload length in bytes
+
+        // now write tlvs to ByteBuffer
+        for (Tlv t : tlvs) {
+            t.writeTo(buf);
+        }
+
+        // then return as byte[]
+        return buf.array();
+    }
+
+    // decoding, should return a nice Packet class
+    public static Packet read(InputStream inputStream) throws IOException {
+        // read header into byte array
+        byte[] header = readFully(inputStream, HEADER_SIZE);
+        if (header == null) return null; // this is a problem
+
+        // allows is to play with header easier
+        ByteBuffer hb = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN);
+
+        // grab magic
+        int magic = hb.getInt(); // read 4 bytes, position now 4
+
+        if(magic != MAGIC) {
+            throw new IOException("bad magic :(");
+        }
+
+        byte ver =  hb.get(); // read 1 byte, position now 5
+        byte op =  hb.get(); // read 1 byte, position now 6
+        hb.getShort(); // reserved but consume
+        int payloadLen = hb.getInt();
+
+        // not good, or good, could be typing packet or something
+        if (payloadLen < 0) {
+            throw new IOException("negative payload length");
+        }
+
+        // read payload
+        byte[] payload = readFully(inputStream, payloadLen);
+        if (payload == null) {
+            throw new EOFException("unexpected EOF in payload");
+        }
+
+        Packet pkt = new Packet();
+        pkt.version = ver;
+        pkt.opcode  = op;
+        // parse tlvs
+        ByteBuffer pb = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN);
+
+        while (pb.hasRemaining()) { // read till end
+            if (pb.remaining() < 4) { // tlv header being 4 bytes
+                throw new IOException("truncated tlv header");
+            }
+            int type = Short.toUnsignedInt(pb.getShort()); // grab type
+            int len  = Short.toUnsignedInt(pb.getShort()); // length of content
+            if (len > pb.remaining()) {
+                throw new IOException("tlv length longer than remaining, not good bro");
+            }
+            byte[] value = new byte[len]; // value of said tlv
+            pb.get(value); // put in byte buffer
+            pkt.tlvs.add(new Tlv(type, value)); // add tlv to packet
+        }
+
+        // yes man got packet
+        return pkt;
+    }
+
+    private static byte[] readFully(InputStream inputStream, int n) throws IOException {
+        // create new byte array, length of n to store bytes read from in
+        byte[] b = new byte[n];
+        // how many bytes have been read so far
+        int off = 0;
+        // continue reading till n, meaning we have read n bytes
+        while (off < n) {
+            // read bytes into b, off to n-off
+            int r = inputStream.read(b, off, n - off);
+
+            // if r is -1, this means we reached the end of the stream before reading n bytes
+            // if no bytes are read at all, off == 0, just return null
+            // anyways just return b containing only bytes successfully read
+            if (r == -1) return off == 0 ? null : Arrays.copyOf(b, off);
+
+            // add number of bytes just read to off
+            off += r;
+        }
+
+        // successfully read n bytes
+        return b;
+    }
+
+    // add tlv to packet
+    public Packet addStr(int type, String s) {
+        tlvs.add(Tlv.ofStr(type, s));
+        return this;
+    }
+
+    // add u32 to packet
+    public Packet addU32(int type, long v) {
+        tlvs.add(Tlv.ofU32(type, v));
+        return this;
+    }
+
+    // add u64 to packet
+    public Packet addU64(int type, long v) {
+        tlvs.add(Tlv.ofU64(type, v));
+        return this;
+    }
+
+    // add byte array to packet
+    public Packet addBytes(int type, byte[] v) {
+        tlvs.add(new Tlv(type, v));
+        return this;
     }
 
     // TLV subclass
