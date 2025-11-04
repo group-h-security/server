@@ -123,6 +123,7 @@ public class Server {
     }
 
     // room management
+    // TODOOOO: protocol first
 
     public void stop() {
         running = false;
