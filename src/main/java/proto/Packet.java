@@ -15,6 +15,8 @@ package proto;
 // HEARTBEAT_ACK: acknowledge the server -> 0x01
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,6 +59,47 @@ public class Packet {
             b.put(value);
         }
 
+        // okay so we dont want to encode everything as strings, we have usernames messages room codes
+        // these can be interpreted differently, like u32 could store content length of the actual message
+        // u64 could store a timestamp, note sure if we actually need this but we are here now
+
+        // utf-8 encoded because standards are good and we love emojis
+        public static Tlv ofStr(int type, String s) { // given string
+            byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+            return new Tlv(type, bytes);
+        }
+
+        // 4byte tlv stored as BIG_ENDIAN because thats apparently a standard
+        public static Tlv ofU32(int type, long v) { // we need lower 4 bytes
+            ByteBuffer b = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN);
+            b.putInt((int) v);
+            return new Tlv(type, b.array());
+        }
+
+        // same for 8byte
+        public static Tlv ofU64(int type, long v) { // we need lower 8 bytes
+            ByteBuffer b = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN);
+            b.putLong(v);
+            return new Tlv(type, b.array());
+        }
+
+        // interpret tlv as str
+        public String asStr() {
+            return new String(value, StandardCharsets.UTF_8);
+        }
+
+        // THANKS GPT SOMETHING GOT TO DO WITH JAVA BEING WEIRD ABOUT SMALL NUMBERS
+        // interpret as u32
+        public long asU32() {
+            if (value.length != 4) throw new IllegalStateException("U32 requires 4 bytes");
+            return ByteBuffer.wrap(value).order(ByteOrder.BIG_ENDIAN).getInt() & 0xFFFF_FFFFL;
+        }
+
+        // interpret as u64
+        public long asU64() {
+            if (value.length != 8) throw new IllegalStateException("U64 requires 8 bytes");
+            return ByteBuffer.wrap(value).order(ByteOrder.BIG_ENDIAN).getLong();
+        }
 
     }
 
