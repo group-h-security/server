@@ -25,8 +25,8 @@ public class Room {
         // for each user in the room
         for (User u : users) {
             try {
-                PrintWriter out = new PrintWriter(u.getUserSocket().getOutputStream(), true);
-                if (from != null) out.printf("[%s] %s%n", from.getUsername(), msg); // print message from user
+                PrintWriter out = new PrintWriter(u.userSocket.getOutputStream(), true);
+                if (from != null) out.printf("[%s] %s%n", from.username, msg); // print message from user
                 else out.printf("%s%n", msg); // system message
             } catch (Exception ignored) { }
         }

@@ -4,6 +4,10 @@ import javax.management.monitor.StringMonitor;
 import javax.net.ssl.*;
 import java.io.*;
 import java.security.*;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 public class Server {
     // standard port for https or tls
@@ -12,7 +16,6 @@ public class Server {
     private static final String KEYSTORE_PATH = "certs/server-keystore.jks";
     // path to servers truststore (all trusted clients)
     private static final String TRUSTSTORE_PATH = "certs/server-truststore.jks";
-
     // TODO: this is a horrible idea for prod but gotta work with what we got iykyk
     private static final String KEYSTORE_PASSWORD = "serverpass";
     private static final String TRUSTSTORE_PASSWORD = "serverpass";
@@ -21,6 +24,13 @@ public class Server {
     // today i learned volatile is a way to mark a variable as stored in main memory
     // not just in a threads local cache
     private volatile boolean running;
+
+    // idle threads (workers) on stand by ready to be given work
+    private final ExecutorService pool = Executors.newCachedThreadPool();
+
+    // thread safe impl of HashMap is ConcurrentHashMap
+    private final Map<UUID, Room> rooms = new ConcurrentHashMap<>();
+    private final Map<String, UUID> roomCodeIndex = new ConcurrentHashMap<>();
 
     // we start the server when constructed
     public Server() {
@@ -96,11 +106,10 @@ public class Server {
                     // force TLS handshake
                     clientSocket.setUseClientMode(false);
                     clientSocket.startHandshake(); // mTLS enforced
-
                     System.out.println("client authenticated successfully :)");
 
-                    // simple echo, echo back anything client says
-                    handleClient(clientSocket);
+                    // submit a new task to thread pool
+                    pool.submit(new ClientHandler(clientSocket));
                 } catch (SSLHandshakeException e) {
                     System.err.println("handshake failed" + e.getMessage());
                 } catch (IOException e) {
@@ -113,30 +122,7 @@ public class Server {
         }
     }
 
-    // read messages and echo them back
-    private void handleClient(SSLSocket clientSocket) {
-        try(BufferedReader in = new BufferedReader(
-            new InputStreamReader(clientSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
-
-            System.out.println("echo: type messages to test connection");
-
-            String message;
-            while((message = in.readLine()) != null) {
-                System.out.printf("recieved: %s\n", message);
-                if(message.equals("QUIT")) {
-                    out.printf("BYE\n");
-                    System.out.println("client disconnected");
-                    break;
-                }
-
-                // echo message back
-                out.printf("ECHO: %s\n", message);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    // room management
 
     public void stop() {
         running = false;
