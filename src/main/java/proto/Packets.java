@@ -50,7 +50,6 @@ public final class Packets {
         return p;
     }
 
-
     // for server to send
     public static Packet heartbeatAck(long nowMs) {
         Packet p = new Packet();

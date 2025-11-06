@@ -3,6 +3,7 @@ package grouph.core;
 import proto.Op;
 import proto.Packet;
 import proto.Packets;
+import proto.T;
 
 import javax.net.ssl.SSLSocket;
 import java.io.IOException;
@@ -38,28 +39,84 @@ public class ClientHandler implements Runnable {
 
                 switch(pkt.opcode) {
                     case Op.HEARTBEAT -> {
-
+                        Packets.write(out, Packets.heartbeatAck(System.currentTimeMillis()));
                     }
                     case Op.CREATE_ROOM-> {
-
+                        String code = generateRoomCode(); // gen code
+                        Room room = registry.getOrCreateByCode(code); // create room
+                        attachToRoom(room);
                     }
                     case Op.JOIN_ROOM -> {
-
+                        String code = pkt.getStr(T.ROOM_CODE); // get room code from pkt
+                        Room room = registry.getByCode(code);
+                        if (room == null) {
+                            Packets.write(out, Packets.error(404, "room not found"));
+                            break;
+                        }
+                        attachToRoom(room); // attach user to room requested to join
+                        Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode)); // acknowledge
+                        bus.userJoined(room, session.username == null ? "system" : session.username); // system broadcast
                     }
                     case Op.CHAT_SEND -> {
-
+                        if (session.roomId == null) { // user must be in room to send message
+                            Packets.write(out, Packets.error(400, "not in room"));
+                            break;
+                        }
+                        if (!Packets.validateContentLen(pkt)) {
+                            Packets.write(out, Packets.error(400, "bad content length"));
+                            break;
+                        }
+                        Room r = registry.getById(session.roomId);
+                        // if no username just use anon
+                        bus.chat(r, session.username == null ? "anon" : session.username, pkt.getStr(T.MESSAGE));
                     }
                     case Op.LEAVE -> {
-
+                        detachFromRoom();
+                        Packets.write(out, Packets.leave());
+                        running = false;
                     }
                     default -> {
-
+                        Packets.write(out, Packets.error(400, "unknown opcode"));
                     }
                 }
             }
 
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            cleanup();
         }
+    }
+
+    private void cleanup() {
+        try { detachFromRoom(); } catch (Exception ignored) {}
+        try { socket.close(); } catch (Exception ignored) {}
+    }
+
+    private void detachFromRoom() {
+        if (session.roomId == null) return;
+        Room r = registry.getById(session.roomId);
+        if (r != null) {
+            r.remove(session);
+            bus.userLeft(r, session.username == null ? "system" : session.username);
+            registry.removeIfEmpty(r);
+        }
+        session.roomId = null;
+    }
+
+    private void attachToRoom(Room room) {
+        if(room == null) return;
+        if(session.roomId != null) { // remove from prev room
+            Room prev = registry.getById(session.roomId);
+            if (prev != null) prev.remove(session);
+            registry.removeIfEmpty(prev);
+        }
+        room.add(session);
+        session.roomId = room.roomId;
+    }
+
+    private String generateRoomCode() {
+        int n = (int)(Math.random() * 1_000_000);
+        return String.format("%06d", n); // conv to str
     }
 }
