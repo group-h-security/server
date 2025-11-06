@@ -5,14 +5,19 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import proto.Op;
+import proto.Packet;
+import proto.Packets;
+import proto.T;
 
 import javax.net.ssl.*;
 import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ServerTest {
     private static Server server;
@@ -119,5 +124,35 @@ public class ServerTest {
         System.out.println("protocol: " + session.getProtocol());
 
         socket.close();
+    }
+
+    @Test
+    @DisplayName("Client creates a room successfully")
+    void testClientCreateRoom() throws Exception {
+        SSLSocket clientSocket = createClientSocket();
+        clientSocket.setSoTimeout(3000); // prevent indefinite blocking
+        clientSocket.startHandshake();
+
+        InputStream in = clientSocket.getInputStream();
+        OutputStream out = clientSocket.getOutputStream();
+
+        // send CREATE_ROOM packet
+        Packet createRoomPkt = Packets.createRoom();
+        Packets.write(out, createRoomPkt);
+
+        try {
+            Packet ack = Packets.read(in);
+            assertNotNull(ack, "Server should respond with CREATE_ROOM_ACK");
+            System.out.println("Server responded with opcode: " + ack.opcode);
+            // validate roomCode is present and 6 digits
+            String roomCode = ack.getStr(T.ROOM_CODE);
+            assertNotNull(roomCode, "Room code must be present");
+            assertEquals(6, roomCode.length(), "Room code should be 6 digits");
+            System.out.println("Room created successfully with code: " + roomCode);
+            clientSocket.close();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            fail("Failed to read server response");
+        }
     }
 }

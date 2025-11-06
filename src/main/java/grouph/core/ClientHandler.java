@@ -45,6 +45,7 @@ public class ClientHandler implements Runnable {
                         String code = generateRoomCode(); // gen code
                         Room room = registry.getOrCreateByCode(code); // create room
                         attachToRoom(room);
+                        Packets.write(out, Packets.createRoomAck(room.roomId, room.roomCode)); // acknowledge
                     }
                     case Op.JOIN_ROOM -> {
                         String code = pkt.getStr(T.ROOM_CODE); // get room code from pkt
