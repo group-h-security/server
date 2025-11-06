@@ -5,12 +5,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class UserSession {
     public final SSLSocket socket;
-    public final String username;
+    public String username;
     public volatile Room room;
     public final AtomicLong lastSeenMs = new AtomicLong(System.currentTimeMillis());
 
-    public UserSession(SSLSocket socket, String username) {
+    public UserSession(SSLSocket socket) {
         this.socket = socket;
-        this.username = username;
     }
 }

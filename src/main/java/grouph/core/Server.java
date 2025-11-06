@@ -86,6 +86,12 @@ public class Server {
             // with this both server and client must prove identity
             serverSocket.setNeedClientAuth(true);
 
+            // set up room registery
+            final RoomRegistry roomRegistry = new RoomRegistry();
+            final ServerBus serverBus = new ServerBus(); // broadcasting
+
+            // TODO: heartbeat monitor
+
             running = true;
             System.out.printf( // programming java for 3 years and only know i realise printf is a thing
                 """
@@ -108,7 +114,7 @@ public class Server {
                     System.out.println("client authenticated successfully :)");
 
                     // submit a new task to thread pool
-                    pool.submit(new ClientHandler(clientSocket));
+                    pool.submit(new ClientHandler(clientSocket, roomRegistry, serverBus));
                 } catch (SSLHandshakeException e) {
                     System.err.println("handshake failed" + e.getMessage());
                 } catch (IOException e) {
