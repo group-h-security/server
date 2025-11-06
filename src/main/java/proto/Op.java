@@ -8,6 +8,7 @@ public interface Op {
     byte JOIN_ROOM = 0x03;
     byte CHAT_SEND = 0x04;
     byte LEAVE = 0x05;
+    byte SET_USERNAME = 0x06;
 
     // server -> client
     byte HEARTBEAT_ACK = 0x11;
@@ -17,7 +18,10 @@ public interface Op {
     byte USER_JOINED = 0x15;
     byte USER_LEFT = 0x16;
     byte LEAVE_ACK = 0x17;
+    byte SET_USERNAME_ACK = 0x18;
 
     // error
     byte ERROR = 0x7F;
+
+    // new
 }

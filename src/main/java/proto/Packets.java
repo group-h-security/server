@@ -50,6 +50,12 @@ public final class Packets {
         return p;
     }
 
+    public static Packet setUsername(String username) {
+        Packet p = new Packet();
+        p.opcode = Op.SET_USERNAME;
+        return p.addStr(T.USERNAME, username);
+    }
+
     // for server to send
     public static Packet heartbeatAck(long nowMs) {
         Packet p = new Packet();
@@ -63,6 +69,12 @@ public final class Packets {
         p.opcode = Op.CREATE_ROOM_ACK;
         return p.addBytes(T.ROOM_ID, uuidToBytes(roomId))
             .addStr(T.ROOM_CODE, roomCode);
+    }
+
+    public static Packet setUsernameAck(String username) {
+        Packet p = new Packet();
+        p.opcode = Op.SET_USERNAME_ACK;
+        return p.addStr(T.USERNAME, username);
     }
 
     // for server to send
@@ -141,4 +153,5 @@ public final class Packets {
         long lsb = b.getLong();
         return new UUID(msb, lsb);
     }
+
 }
