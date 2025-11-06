@@ -1,6 +1,5 @@
-package grouph;
+package grouph.core;
 
-import javax.management.monitor.StringMonitor;
 import javax.net.ssl.*;
 import java.io.*;
 import java.security.*;
@@ -123,7 +122,7 @@ public class Server {
     }
 
     // room management
-    // TODOOOO: protocol first
+
 
     public void stop() {
         running = false;
