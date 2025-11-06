@@ -58,9 +58,9 @@ public class ClientHandler implements Runnable {
                             Packets.write(out, Packets.error(404, "room not found"));
                             break;
                         }
+                        bus.userJoined(room, session.username == null ? "system" : session.username); // broadcast BEFORE adding
                         attachToRoom(room); // attach user to room requested to join
                         Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode)); // acknowledge
-                        bus.userJoined(room, session.username == null ? "system" : session.username); // broadcast
                     }
                     case Op.CHAT_SEND -> {
                         if (session.roomId == null) { // user must be in room to send message

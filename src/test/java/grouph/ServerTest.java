@@ -99,22 +99,20 @@ public class ServerTest {
     }
 
     @Test
-    @DisplayName("mTLS handshake succeeds")
-    void testMTLSHandshake() throws Exception {
-        System.out.println("TEST 1: testing mTLS handshake...");
+    @DisplayName("mTLS handshake, room creation, joining, and messaging")
+    void testFullFlow() throws Exception {
+        SSLSocket client1 = createClientSocket();
+        SSLSocket client2 = createClientSocket();
 
-        // create client socket with proper certs
-        SSLSocket socket = createClientSocket();
-
-        // verify socket is connected
-        assertNotNull(socket, "socket should be created");
-        assertTrue(socket.isConnected(), "socket should be connected");
+        client1.setSoTimeout(5000);
+        client2.setSoTimeout(5000);
 
         // manually trigger handshake
-        socket.startHandshake();
+        client1.startHandshake();
+        client2.startHandshake();
 
         // verify handshake created valid session
-        SSLSession session = socket.getSession();
+        SSLSession session = client1.getSession();
         assertNotNull(session, "ssl session should exist");
         assertTrue(session.isValid(), "ssl session should be valid");
 
@@ -122,90 +120,6 @@ public class ServerTest {
         System.out.println("mTLS handshake successful");
         System.out.println("cipher suite: " + session.getCipherSuite());
         System.out.println("protocol: " + session.getProtocol());
-
-        socket.close();
-    }
-
-    @Test
-    @DisplayName("Client creates a room successfully")
-    void testClientCreateRoom() throws Exception {
-        SSLSocket clientSocket = createClientSocket();
-        clientSocket.setSoTimeout(3000); // prevent indefinite blocking
-        clientSocket.startHandshake();
-
-        InputStream in = clientSocket.getInputStream();
-        OutputStream out = clientSocket.getOutputStream();
-
-        // send CREATE_ROOM packet
-        Packet createRoomPkt = Packets.createRoom();
-        Packets.write(out, createRoomPkt);
-
-        try {
-            Packet ack = Packets.read(in);
-            assertNotNull(ack, "Server should respond with CREATE_ROOM_ACK");
-            System.out.println("Server responded with opcode: " + ack.opcode);
-            // validate roomCode is present and 6 digits
-            String roomCode = ack.getStr(T.ROOM_CODE);
-            assertNotNull(roomCode, "Room code must be present");
-            assertEquals(6, roomCode.length(), "Room code should be 6 digits");
-            System.out.println("Room created successfully with code: " + roomCode);
-            clientSocket.close();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            fail("Failed to read server response");
-        }
-    }
-
-    @Test
-    @DisplayName("Client creates and joins a room successfully")
-    void testClientJoinRoom() throws Exception {
-        SSLSocket clientSocket = createClientSocket();
-        clientSocket.setSoTimeout(5000); // slightly longer timeout
-        clientSocket.startHandshake();
-
-        InputStream in = clientSocket.getInputStream();
-        OutputStream out = clientSocket.getOutputStream();
-
-        try {
-            Packet createRoomPkt = Packets.createRoom();
-            Packets.write(out, createRoomPkt);
-
-            Packet createAck = Packets.read(in);
-            assertNotNull(createAck, "Server should respond with CREATE_ROOM_ACK");
-            assertEquals(Op.CREATE_ROOM_ACK, createAck.opcode, "Expected CREATE_ROOM_ACK opcode");
-
-            String roomCode = createAck.getStr(T.ROOM_CODE);
-            assertNotNull(roomCode, "Room code must be present");
-            assertEquals(6, roomCode.length(), "Room code should be 6 digits");
-            System.out.println("Room created successfully with code: " + roomCode);
-
-            Packet joinRoomPkt = Packets.joinRoom(roomCode);
-            Packets.write(out, joinRoomPkt);
-
-            Packet joinAck = Packets.read(in);
-            assertNotNull(joinAck, "Server should respond with JOIN_ROOM_ACK");
-            assertEquals(Op.JOIN_ROOM_ACK, joinAck.opcode, "Expected JOIN_ROOM_ACK opcode");
-
-            String joinedRoomCode = joinAck.getStr(T.ROOM_CODE);
-            assertEquals(roomCode, joinedRoomCode, "Joined room code should match created room");
-            System.out.println("Joined room successfully with code: " + joinedRoomCode);
-
-        } finally {
-            clientSocket.close();
-        }
-    }
-
-    @Test
-    @DisplayName("Two clients join same room, message sent and received")
-    void testTwoClientsChat() throws Exception {
-        SSLSocket client1 = createClientSocket();
-        SSLSocket client2 = createClientSocket();
-
-        client1.setSoTimeout(5000);
-        client2.setSoTimeout(5000);
-
-        client1.startHandshake();
-        client2.startHandshake();
 
         try (InputStream in1 = client1.getInputStream();
              OutputStream out1 = client1.getOutputStream();
@@ -218,8 +132,14 @@ public class ServerTest {
 
             // read create room ack
             Packet createAck = Packets.read(in1);
-            assertNotNull(createAck);
-            assertEquals(Op.CREATE_ROOM_ACK, createAck.opcode);
+            assertNotNull(createAck, "Server should respond with CREATE_ROOM_ACK");
+            assertEquals(Op.CREATE_ROOM_ACK, createAck.opcode, "Expected CREATE_ROOM_ACK opcode");
+
+            // validate roomCode is present and 6 digits
+            String roomCode = createAck.getStr(T.ROOM_CODE);
+            assertNotNull(roomCode, "Room code must be present");
+            assertEquals(6, roomCode.length(), "Room code should be 6 digits");
+            System.out.println("Room created successfully with code: " + roomCode);
 
             // set username for person who create room (they already joined but under anon)
             Packet setUsername = Packets.setUsername("client1");
@@ -230,20 +150,16 @@ public class ServerTest {
             assertNotNull(setUsernameAck);
             assertEquals(Op.SET_USERNAME_ACK, setUsernameAck.opcode);
 
-            // grab room code from createAck packet
-            String roomCode = createAck.getStr(T.ROOM_CODE);
-            assertNotNull(roomCode);
-            assertEquals(6, roomCode.length());
-
             // client 2 joins room
             Packet joinRoomPkt = Packets.joinRoom(roomCode).addStr(T.USERNAME, "client2");
             Packets.write(out2, joinRoomPkt);
 
             // validate joined room
             Packet joinAck = Packets.read(in2);
-            assertNotNull(joinAck);
-            assertEquals(Op.JOIN_ROOM_ACK, joinAck.opcode);
-            assertEquals(roomCode, joinAck.getStr(T.ROOM_CODE));
+            assertNotNull(joinAck, "Server should respond with JOIN_ROOM_ACK");
+            assertEquals(Op.JOIN_ROOM_ACK, joinAck.opcode, "Expected JOIN_ROOM_ACK opcode");
+            assertEquals(roomCode, joinAck.getStr(T.ROOM_CODE), "Joined room code should match created room");
+            System.out.println("Joined room successfully with code: " + roomCode);
 
             // client 1 should recieve USER_JOINED for client 2
             Packet userJoined = Packets.read(in1);
@@ -268,10 +184,118 @@ public class ServerTest {
 
             assertEquals("client2", receivedUser); // make sure client2 is the username who sent message
             assertEquals(message, receivedMessage); // make sure the message is the same
+
+            // client 2 also receives their own message broadcast
+            Packet broadcastSelf = Packets.read(in2);
+            assertNotNull(broadcastSelf);
+            assertEquals(Op.CHAT_BROADCAST, broadcastSelf.opcode);
+            System.out.println("Client 2 received their own message broadcast");
+
+            // test heartbeat
+            Packet heartbeat = Packets.heartbeat();
+            Packets.write(out1, heartbeat);
+
+            Packet heartbeatAck = Packets.read(in1);
+            assertNotNull(heartbeatAck);
+            assertEquals(Op.HEARTBEAT_ACK, heartbeatAck.opcode);
+            System.out.println("Heartbeat successful");
+
+            // client 2 leaves room
+            Packet leavePkt = Packets.leave();
+            Packets.write(out2, leavePkt);
+
+            // client 1 should receive USER_LEFT broadcast for client 2
+            Packet userLeft1 = Packets.read(in1);
+            assertNotNull(userLeft1);
+            assertEquals(Op.USER_LEFT, userLeft1.opcode);
+            System.out.println("Client 1 received USER_LEFT notification");
+
+            // client 2 receives leave acknowledgment (no USER_LEFT because they were removed before broadcast)
+            Packet leaveAck = Packets.read(in2);
+            assertNotNull(leaveAck);
+            assertEquals(Op.LEAVE, leaveAck.opcode);
+            System.out.println("Client 2 left successfully");
         } finally {
             client1.close();
             client2.close();
         }
     }
 
+    @Test
+    @DisplayName("Join nonexistent room returns error")
+    void testJoinNonexistentRoom() throws Exception {
+        SSLSocket client = createClientSocket();
+        client.setSoTimeout(5000);
+        client.startHandshake();
+
+        try (InputStream in = client.getInputStream();
+             OutputStream out = client.getOutputStream()) {
+
+            // try to join room that doesnt exist
+            Packet joinRoomPkt = Packets.joinRoom("999999");
+            Packets.write(out, joinRoomPkt);
+
+            Packet response = Packets.read(in);
+            assertNotNull(response);
+            assertEquals(Op.ERROR, response.opcode);
+
+            long errorCode = response.getU32(T.ERROR_CODE);
+            assertEquals(404, errorCode, "Should return 404 for room not found");
+            System.out.println("Error received as expected: " + response.getStr(T.REASON));
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Send message without joining room returns error")
+    void testChatWithoutRoom() throws Exception {
+        SSLSocket client = createClientSocket();
+        client.setSoTimeout(5000);
+        client.startHandshake();
+
+        try (InputStream in = client.getInputStream();
+             OutputStream out = client.getOutputStream()) {
+
+            // try to send message without being in room
+            Packet chatPkt = Packets.chatSend("hello world");
+            Packets.write(out, chatPkt);
+
+            Packet response = Packets.read(in);
+            assertNotNull(response);
+            assertEquals(Op.ERROR, response.opcode);
+
+            long errorCode = response.getU32(T.ERROR_CODE);
+            assertEquals(400, errorCode, "Should return 400 for not in room");
+            System.out.println("Error received as expected: " + response.getStr(T.REASON));
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
+    @DisplayName("Unknown opcode returns error")
+    void testUnknownOpcode() throws Exception {
+        SSLSocket client = createClientSocket();
+        client.setSoTimeout(5000);
+        client.startHandshake();
+
+        try (InputStream in = client.getInputStream();
+             OutputStream out = client.getOutputStream()) {
+
+            // send packet with invalid opcode
+            Packet invalidPkt = new Packet();
+            Packets.write(out, invalidPkt);
+
+            Packet response = Packets.read(in);
+            assertNotNull(response);
+            assertEquals(Op.ERROR, response.opcode);
+
+            long errorCode = response.getU32(T.ERROR_CODE);
+            assertEquals(400, errorCode, "Should return 400 for unknown opcode");
+            System.out.println("Error received as expected: " + response.getStr(T.REASON));
+        } finally {
+            client.close();
+        }
+    }
 }

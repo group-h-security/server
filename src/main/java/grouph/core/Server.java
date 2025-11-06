@@ -127,9 +127,6 @@ public class Server {
         }
     }
 
-    // room management
-
-
     public void stop() {
         running = false;
         try {
