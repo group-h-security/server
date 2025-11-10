@@ -13,4 +13,5 @@ public interface T {
     int REASON = 0x0006; // str
     int TIMESTAMPMS = 0x0007; // u64
     int ERROR_CODE = 0x0008; // u32
+    int CHAT_LOGS = 0x0009; // str
 }

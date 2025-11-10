@@ -1,5 +1,8 @@
 package proto;
 
+import grouph.core.DataManager;
+import grouph.core.Room;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -56,7 +59,20 @@ public final class Packets {
         return p.addStr(T.USERNAME, username);
     }
 
+    public static Packet getLogs() {
+        Packet p = new Packet();
+        p.opcode = Op.GET_LOGS;
+        return p;
+    }
+
     // for server to send
+
+    public static Packet getLogsAck(String chatLogs) {
+        Packet p = new Packet();
+        p.opcode = Op.GET_LOGS_ACK;
+        return p.addStr(T.CHAT_LOGS, chatLogs);
+    }
+
     public static Packet heartbeatAck(long nowMs) {
         Packet p = new Packet();
         p.opcode = Op.HEARTBEAT_ACK;

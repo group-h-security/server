@@ -44,7 +44,6 @@ public class ClientHandler implements Runnable {
                     case Op.CREATE_ROOM -> {
                         String code = generateRoomCode(); // gen code
                         Room room = registry.getOrCreateByCode(code); // create room
-                        attachToRoom(room);
                         Packets.write(out, Packets.createRoomAck(room.roomId, room.roomCode)); // acknowledge
                     }
                     case Op.JOIN_ROOM -> {
@@ -63,6 +62,7 @@ public class ClientHandler implements Runnable {
                         Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode)); // acknowledge
                     }
                     case Op.CHAT_SEND -> {
+                        // TODOOOOOOOO: write to file based on room, implement in DataManager
                         if (session.roomId == null) { // user must be in room to send message
                             Packets.write(out, Packets.error(400, "not in room"));
                             break;
@@ -72,6 +72,8 @@ public class ClientHandler implements Runnable {
                             break;
                         }
                         Room r = registry.getById(session.roomId);
+                        DataManager dataManager = new DataManager(r);
+                        dataManager.saveMessage(pkt.getStr(T.MESSAGE));
                         // if no username just use anon
                         bus.chat(r, session.username == null ? "anon" : session.username, pkt.getStr(T.MESSAGE));
                     }
@@ -83,6 +85,15 @@ public class ClientHandler implements Runnable {
                     case Op.SET_USERNAME -> {
                         session.username = pkt.getStr(T.USERNAME);
                         Packets.write(out, Packets.setUsernameAck(session.username));
+                    }
+                    case Op.GET_LOGS -> {
+                        if(session.roomId == null) {
+                            Packets.write(out, Packets.error(400, "not in room"));
+                        }
+                        Room r = registry.getById(session.roomId);
+                        DataManager dataManager = new DataManager(r);
+                        String logs = dataManager.getLogs();
+                        Packets.write(out, Packets.getLogsAck(logs));
                     }
                     default -> {
                         Packets.write(out, Packets.error(400, "unknown opcode"));
