@@ -1,3 +1,4 @@
+
 plugins {
     java
     application
@@ -28,10 +29,18 @@ tasks.withType<JavaCompile>().configureEach {
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
 }
 
 tasks.test {
     useJUnitPlatform()
+}
+
+ // - O.
+
+tasks.register("generateCsr") {
+
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
