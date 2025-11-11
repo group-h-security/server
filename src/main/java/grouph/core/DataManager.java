@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.util.Scanner;
 
 import javax.crypto.Cipher;
@@ -12,6 +14,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.UUID;
 
 /**
  * This class is responsible for the saving and retrieval of chat messages for each individual room
@@ -61,26 +64,30 @@ public class DataManager {
     }
 
     //loads/inits the generated AES key to en/decrypt chat logs
-    private static SecretKey getAesKey() {
+    private SecretKey getAesKey() {
         if (aesKey == null) {
             synchronized (DataManager.class) {
                 if (aesKey == null) {
-                    String b64 = System.getProperty(PROP_KEY);
-                    if (b64 == null || b64.isEmpty()) {
-                        b64 = System.getenv(ENV_KEY);
+                    try {
+                        // Convert UUID to bytes
+                        UUID id = room.roomId;
+                        ByteBuffer buffer = ByteBuffer.allocate(16);
+                        buffer.putLong(id.getMostSignificantBits());
+                        buffer.putLong(id.getLeastSignificantBits());
+                        byte[] uuidBytes = buffer.array();
+
+                        // Hash the UUID bytes with SHA-256
+                        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                        byte[] hash = digest.digest(uuidBytes);
+
+                        // Use first 16 bytes for AES-128 key
+                        byte[] keyBytes = new byte[16];
+                        System.arraycopy(hash, 0, keyBytes, 0, 16);
+
+                        aesKey = new SecretKeySpec(keyBytes, "AES");
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Failed to generate AES key from roomId", e);
                     }
-                    if (b64 == null || b64.isEmpty()) {
-                        throw new IllegalStateException(
-                                "Missing AES key for chat logs. " +
-                                        "Set -D" + PROP_KEY + " or environment variable " + ENV_KEY);
-                    }
-                    //ensures valid key length of 128 or 256 bits
-                    byte[] keyBytes = Base64.getDecoder().decode(b64);
-                    if (keyBytes.length != 16 && keyBytes.length != 32) {
-                        throw new IllegalStateException(
-                                "AES key must be 16 or 32 bytes (after Base64 decode)");
-                    }
-                    aesKey = new SecretKeySpec(keyBytes, "AES");
                 }
             }
         }
@@ -94,7 +101,6 @@ public class DataManager {
      */
     public void saveMessage(String message) {
         if (room == null) {
-            System.err.println("Cannot save message: room is null");
             return;
         }
 

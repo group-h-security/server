@@ -11,7 +11,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class DataManagerEncryptedTest {
-
     @Test
     void messagesAreEncryptedOnDiskAndDecryptedByGetLogs() throws Exception {
         //configures AES key: random 128-bit key
@@ -38,15 +37,16 @@ public class DataManagerEncryptedTest {
 
         //check that plaintext is not visible on disk
         assertFalse(raw.contains(msg),
-                "Plaintext message should NOT appear in the log file (should be AES encrypted)");
+            "Plaintext message should NOT appear in the log file (should be AES encrypted)");
 
         //check that getLogs() returns the original plaintext and there is no mutation
         String logs = dm.getLogs();
         assertTrue(logs.contains(msg),
-                "Decrypted logs should contain the original message");
+            "Decrypted logs should contain the original message");
 
+        // only delete the log file, not the directory
         Files.deleteIfExists(path);
-        Files.deleteIfExists(path.getParent());
     }
+
 }
 
