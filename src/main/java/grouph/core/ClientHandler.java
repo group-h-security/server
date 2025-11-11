@@ -62,7 +62,6 @@ public class ClientHandler implements Runnable {
                         Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode)); // acknowledge
                     }
                     case Op.CHAT_SEND -> {
-                        // TODOOOOOOOO: write to file based on room, implement in DataManager
                         if (session.roomId == null) { // user must be in room to send message
                             Packets.write(out, Packets.error(400, "not in room"));
                             break;
@@ -71,9 +70,11 @@ public class ClientHandler implements Runnable {
                             Packets.write(out, Packets.error(400, "bad content length"));
                             break;
                         }
+
                         Room r = registry.getById(session.roomId);
                         DataManager dataManager = new DataManager(r);
                         dataManager.saveMessage(pkt.getStr(T.MESSAGE));
+
                         // if no username just use anon
                         bus.chat(r, session.username == null ? "anon" : session.username, pkt.getStr(T.MESSAGE));
                     }

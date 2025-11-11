@@ -1,3 +1,4 @@
+// chatgpt wrote this validate by ryan
 package grouph;
 
 import grouph.core.Server;
@@ -27,7 +28,7 @@ public class ServerTest {
     private static final String CLIENT_TRUSTSTORE = "certs/client-truststore.jks";
     private static final String PASSWORD = "serverpass"; // TODO: change in prod
 
-    private static final String HOST = "localhost";
+    private static final String HOST = "157.245.40.243";
     private static final int PORT = 8443;
 
     @BeforeAll

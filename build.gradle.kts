@@ -1,10 +1,7 @@
 plugins {
     java
     application
-}
-
-application {
-    mainClass.set("grouph.Main")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "grouph"
@@ -20,6 +17,10 @@ java {
     }
 }
 
+application {
+    mainClass.set("grouph.Main")
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(17)
 }
@@ -30,5 +31,11 @@ dependencies {
 }
 
 tasks.test {
-    useJUnitPlatform() // <--- enable JUnit 5
+    useJUnitPlatform()
+}
+
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    manifest {
+        attributes["Main-Class"] = "grouph.Main"
+    }
 }

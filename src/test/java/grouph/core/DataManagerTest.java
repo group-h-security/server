@@ -1,3 +1,4 @@
+// chatgpt wrote this validate by ryan
 package grouph.core;
 
 import org.junit.jupiter.api.*;
