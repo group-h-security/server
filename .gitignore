@@ -1,3 +1,5 @@
+stores/
+
 ./deploy.sh
 .gradle/
 .idea/

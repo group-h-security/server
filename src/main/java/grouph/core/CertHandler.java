@@ -33,8 +33,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 
 
-public abstract class CertHandler {
-
+public class CertHandler {
     public static void requestCert(String CAUrl) {
         try {
             File outDir = new File("certs");
@@ -73,8 +72,8 @@ public abstract class CertHandler {
 
             //Store response in keystore
             KeyStore ks = KeyStore.getInstance("JKS");
-            String password = Files.readString(Path.of("server/stores/keystorePass.txt"), StandardCharsets.UTF_8).trim();
-            try(FileInputStream fis = new FileInputStream(new File("server/stores/server-keystore.jks"))) {
+            String password = Files.readString(Path.of("stores/keystorePass.txt"), StandardCharsets.UTF_8).trim();
+            try(FileInputStream fis = new FileInputStream(new File("stores/server-keystore.jks"))) {
                 ks.load(fis, password.toCharArray());
             }
 
@@ -99,7 +98,7 @@ public abstract class CertHandler {
             //replace the dummy entry in the keystore with this valid one
             ks.setKeyEntry("server", key, password.toCharArray(), chain.toArray(new X509Certificate[0]));
 
-            try (FileOutputStream out = new FileOutputStream("server/stores/server-keystore.jks")) {
+            try (FileOutputStream out = new FileOutputStream("stores/server-keystore.jks")) {
                 ks.store(out, password.toCharArray());
             }
 

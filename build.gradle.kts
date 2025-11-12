@@ -39,12 +39,38 @@ tasks.test {
 
  // - O.
 
-tasks.register("generateCsr") {
-
-}
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     manifest {
         attributes["Main-Class"] = "grouph.Main"
+    }
+}
+
+
+val runShellScript by tasks.registering(Exec::class) {
+    commandLine("sh", "./buildKeystore.sh")
+}
+
+val generateCsr by tasks.registering(JavaExec::class) {
+    mainClass.set("grouph.core.CertHandler")
+    classpath = sourceSets["main"].runtimeClasspath
+    args = listOf()
+    onlyIf {
+        System.getenv("GENERATE_CSR")?.toBoolean() == true
+    }
+    dependsOn(runShellScript)
+}
+
+if (System.getenv("GENERATE_CSR")?.toBoolean() == true) {
+    tasks.named("build") {
+        dependsOn(generateCsr)
+    }
+
+    tasks.named("run") {
+        dependsOn(generateCsr)
+    }
+
+    tasks.withType<Test>().configureEach {
+        dependsOn(generateCsr)
     }
 }
