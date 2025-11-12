@@ -1,53 +1,60 @@
 package grouph.core;
 
-
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.*;
-import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
+import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
-import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
-
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 
 import java.io.*;
 import java.net.*;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.http.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.security.*;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+import java.security.cert.*;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashSet;
-
+import java.util.*;
 
 public class CertHandler {
-    public static void requestCert(String CAUrl) {
+    public static void requestServerCert(String CAUrl) {
+        requestCert(CAUrl, "server", Path.of("stores/server-keystore.jks"),
+            Path.of("stores/keystorePass.txt"), Path.of("certs"));
+    }
+
+    public static void requestClientCert(String CAUrl) {
+        requestCert(CAUrl, "client", Path.of("certs/client-keystore.jks"),
+            Path.of("certs/keystorePass.txt"), Path.of("certs"));
+    }
+
+    public static void requestCert(String CAUrl, String alias, Path keystorePath, Path passPath, Path outDir) {
         try {
-            File outDir = new File("certs");
-            outDir.mkdirs();
-            String csrPEM = generateCsr();
-            System.out.println(csrPEM);
-            Path csrPath = Path.of(outDir.getAbsolutePath(), "server.csr");
-            Files.writeString(csrPath, csrPEM);
-            System.out.println("CSR Generated at " + new File(outDir, "server.csr").getAbsolutePath());
+            File outDirFile = outDir.toFile();
+            outDirFile.mkdirs();
+
+            Path csrPath = Path.of(outDirFile.getAbsolutePath(), alias + ".csr");
+            String csrPEM;
+
+            // If CSR already exists, reuse it
+            if (Files.exists(csrPath)) {
+                csrPEM = Files.readString(csrPath);
+                System.out.println("Using existing CSR: " + csrPath.toAbsolutePath());
+            } else {
+                csrPEM = generateCsr(keystorePath, passPath, alias);
+                System.out.println(csrPEM);
+                Files.writeString(csrPath, csrPEM);
+                System.out.println("CSR Generated at " + csrPath.toAbsolutePath());
+            }
 
             String boundary = "---Boundary" + System.currentTimeMillis();
 
             String body =
                 "--" + boundary + "\r\n" +
-                    "Content-Disposition: form-data; name=\"csr\"; filename=\"client.csr\"\r\n" +
+                    "Content-Disposition: form-data; name=\"csr\"; filename=\"" + alias + ".csr\"\r\n" +
                     "Content-Type: application/pkcs10\r\n\r\n" +
                     csrPEM + "\r\n" +
                     "--" + boundary + "--\r\n";
@@ -71,14 +78,13 @@ public class CertHandler {
 
             //Store response in keystore
             KeyStore ks = KeyStore.getInstance("JKS");
-            String password = Files.readString(Path.of("stores/keystorePass.txt"), StandardCharsets.UTF_8).trim();
-            try (FileInputStream fis = new FileInputStream(new File("stores/server-keystore.jks"))) {
+            String password = Files.readString(passPath, StandardCharsets.UTF_8).trim();
+            try (FileInputStream fis = new FileInputStream(keystorePath.toFile())) {
                 ks.load(fis, password.toCharArray());
             }
 
-
             //Get the private key from the keystore
-            Key key = ks.getKey("server", password.toCharArray());
+            Key key = ks.getKey(alias, password.toCharArray());
             //if here for validity
 
             // Parsing the returned PEM into a chain
@@ -95,13 +101,23 @@ public class CertHandler {
             if (chain.isEmpty()) throw new IOException("No certificate found");
 
             //replace the dummy entry in the keystore with this valid one
-            ks.setKeyEntry("server", key, password.toCharArray(), chain.toArray(new X509Certificate[0]));
+            ks.setKeyEntry(alias, key, password.toCharArray(), chain.toArray(new X509Certificate[0]));
 
-            try (FileOutputStream out = new FileOutputStream("stores/server-keystore.jks")) {
+            try (FileOutputStream out = new FileOutputStream(keystorePath.toFile())) {
                 ks.store(out, password.toCharArray());
             }
 
             System.out.println("The keystore has been updated");
+
+            // save ca cert for truststore
+            X509Certificate caCert = chain.get(chain.size() - 1);
+            Path caCertPath = outDir.resolve("ca-cert.pem");
+            StringWriter sw = new StringWriter();
+            try (JcaPEMWriter w = new JcaPEMWriter(sw)) {
+                w.writeObject(caCert);
+            }
+            Files.writeString(caCertPath, sw.toString());
+            System.out.println("ca cert saved" + caCertPath);
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -118,15 +134,52 @@ public class CertHandler {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
-
     }
 
-    public static String generateCsr() throws Exception {
+    public static void importCATruststore(Path truststorePath, Path passPath, Path caCertPath) {
+        try {
+            // importing ca cert into trust store
+
+            if (!Files.exists(caCertPath)) {
+                throw new FileNotFoundException("ca certs not found at: " + caCertPath);
+            }
+
+            // load ca cert
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509Certificate caCert;
+            try (FileInputStream fis = new FileInputStream(caCertPath.toFile())) {
+                caCert = (X509Certificate) cf.generateCertificate(fis);
+            }
+
+            // load truststore
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            String password = Files.readString(passPath, StandardCharsets.UTF_8).trim();
+
+            File tsFile = truststorePath.toFile();
+            if (tsFile.exists()) {
+                try (FileInputStream fis = new FileInputStream(tsFile)) {
+                    trustStore.load(fis, password.toCharArray());
+                }
+            } else {
+                trustStore.load(null, password.toCharArray());
+            }
+
+            // import ca cert
+            trustStore.setCertificateEntry("ca", caCert);
+
+            // save truststore
+            try (FileOutputStream fos = new FileOutputStream(truststorePath.toFile())) {
+                trustStore.store(fos, password.toCharArray());
+            }
+            System.out.println("ca cert imported into: " + truststorePath);
+        } catch (Exception e) {
+            throw new RuntimeException("failed to import ca cert into truststore", e);
+        }
+    }
+
+    public static String generateCsr(Path jksPath, Path passPath, String alias) throws Exception {
         // 0) Debug: confirm working dir and keystore files
         System.out.println("PWD = " + System.getProperty("user.dir"));
-        Path passPath = Path.of("stores/keystorePass.txt");
-        Path jksPath = Path.of("stores/server-keystore.jks");
         if (!Files.exists(passPath)) throw new FileNotFoundException(passPath + " not found");
         if (!Files.exists(jksPath)) throw new FileNotFoundException(jksPath + " not found");
 
@@ -139,7 +192,6 @@ public class CertHandler {
             ks.load(in, pass);
         }
 
-        String alias = "server";
         Key key = ks.getKey(alias, pass);
         if (key == null) throw new KeyStoreException("No private key for alias '" + alias + "'");
         PrivateKey priv = (PrivateKey) key;
@@ -177,14 +229,21 @@ public class CertHandler {
         JcaPKCS10CertificationRequestBuilder builder =
             new JcaPKCS10CertificationRequestBuilder(subject, pub);
 
-        // 3) Proper server extensions (no keyCertSign)
+        // permissions
         ExtensionsGenerator extGen = new ExtensionsGenerator();
         extGen.addExtension(Extension.subjectAlternativeName, false,
             new GeneralNames(sans.toArray(new GeneralName[0])));
         extGen.addExtension(Extension.keyUsage, true,
             new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
-        extGen.addExtension(Extension.extendedKeyUsage, true,
-            new ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth));
+
+        if (alias.equalsIgnoreCase("client")) {
+            extGen.addExtension(Extension.extendedKeyUsage, true,
+                new ExtendedKeyUsage(KeyPurposeId.id_kp_clientAuth));
+        } else {
+            extGen.addExtension(Extension.extendedKeyUsage, true,
+                new ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth));
+        }
+
         builder.addAttribute(PKCSObjectIdentifiers.pkcs_9_at_extensionRequest, extGen.generate());
 
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(priv);
@@ -198,6 +257,27 @@ public class CertHandler {
     }
 
     public static void main(String[] args) {
-        requestCert("http://127.0.0.1:5000/sign");
+        try {
+            requestServerCert("http://127.0.0.1:5000/sign");
+            requestClientCert("http://127.0.0.1:5000/sign");
+
+            // import ca to server truststore
+            importCATruststore(
+                Path.of("stores/server-truststore.jks"),
+                Path.of("stores/keystorePass.txt"),
+                Path.of("certs/ca-cert.pem")
+            );
+
+            // import ca into client trust store
+            importCATruststore(
+                Path.of("certs/client-truststore.jks"),
+                Path.of("certs/keystorePass.txt"),
+                Path.of("certs/ca-cert.pem")
+            );
+
+            System.out.println("mTLS setup complete, client and server should be able to communicate");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

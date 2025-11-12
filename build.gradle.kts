@@ -51,7 +51,7 @@ val obtainKeystores by tasks.registering {
 }
 
 val generateCsr by tasks.registering(JavaExec::class) {
-    mainClass.set("grouph.CsrGenerator")
+    mainClass.set("grouph.core.CertHandler")
     classpath = sourceSets["main"].runtimeClasspath
     args = listOf()
     dependsOn(obtainKeystores)

@@ -32,10 +32,9 @@ public class Server {
     // path to servers private key and cert
     private static final String KEYSTORE_PATH = "stores/server-keystore.jks"; // for owen stuff
     // path to servers truststore (all trusted clients)
-    private static final String TRUSTSTORE_PATH = "certs/server-truststore.jks";
+    private static final String TRUSTSTORE_PATH = "stores/server-truststore.jks";
     // TODO: this is a horrible idea for prod but gotta work with what we got iykyk
-    private static final String KEYSTORE_PASSWORD = getKeystorePass("stores/keystorePass.txt");
-    private static final String TRUSTSTORE_PASSWORD = "serverpass";
+    private static final String PASSWORD = getKeystorePass("stores/keystorePass.txt");
 
     private SSLServerSocket serverSocket;
     // today i learned volatile is a way to mark a variable as stored in main memory
@@ -63,19 +62,19 @@ public class Server {
             // load servers key store, which contains servers private key and cert
             KeyStore keyStore = KeyStore.getInstance("JKS");
             try(FileInputStream keyStoreFile = new FileInputStream(KEYSTORE_PATH)) {
-                keyStore.load(keyStoreFile, KEYSTORE_PASSWORD.toCharArray());
+                keyStore.load(keyStoreFile, PASSWORD.toCharArray());
             }
             System.out.println("loaded server keystore");
 
             // use KeyManager to present server cert to clients
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, KEYSTORE_PASSWORD.toCharArray());
+            kmf.init(keyStore, PASSWORD.toCharArray());
             System.out.println("init key manager");
 
             // load server truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
             try(FileInputStream trustStoreFile = new FileInputStream(TRUSTSTORE_PATH)) {
-                trustStore.load(trustStoreFile, TRUSTSTORE_PASSWORD.toCharArray());
+                trustStore.load(trustStoreFile, PASSWORD.toCharArray());
             }
             System.out.println("loaded server trust store (trusted clients)");
 

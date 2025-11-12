@@ -12,21 +12,36 @@ import proto.Packets;
 import proto.T;
 
 import javax.net.ssl.*;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.Scanner;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ServerTest {
+    public static String getKeystorePass(String keystorePassPath) {
+        File ksPassPath = new File(keystorePassPath);
+        try (Scanner myReader = new Scanner(ksPassPath)) {
+            if (myReader.hasNextLine()) {
+                return myReader.nextLine().trim();
+            } else {
+                System.err.println("file is empty: " + keystorePassPath);
+                return null;
+            }
+        } catch (FileNotFoundException e) {
+            System.err.println("reading keystore pass: " + keystorePassPath);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     private static Server server;
     private static Thread serverThread;
 
     private static final String CLIENT_KEYSTORE = "certs/client-keystore.jks";
     private static final String CLIENT_TRUSTSTORE = "certs/client-truststore.jks";
-    private static final String PASSWORD = "serverpass"; // TODO: change in prod
+    private static final String PASSWORD = getKeystorePass("certs/keystorePass.txt");
 
     private static final String HOST = "localhost";
     private static final int PORT = 8443;
