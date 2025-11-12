@@ -9,10 +9,12 @@ build/
 
 
 certs/*
-!certs/server-truststore.jks
+
 
 stores/*
-
+!stores/
+!stores/server-truststore.jks
+!stores/truststorePass.txt
 !certs/.gitkeep
 !stores/.gitkeep
 
