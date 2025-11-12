@@ -39,6 +39,7 @@ public class CertHandler {
             File outDir = new File("certs");
             outDir.mkdirs();
             String csrPEM = generateCsr();
+            System.out.println(csrPEM);
             Path csrPath = Path.of(outDir.getAbsolutePath(), "server.csr");
             Files.writeString(csrPath, csrPEM);
             System.out.println("CSR Generated at "+new File(outDir, "server.csr").getAbsolutePath());
@@ -72,8 +73,8 @@ public class CertHandler {
 
             //Store response in keystore
             KeyStore ks = KeyStore.getInstance("JKS");
-            String password = Files.readString(Path.of("stores/keystorePass.txt"), StandardCharsets.UTF_8).trim();
-            try(FileInputStream fis = new FileInputStream(new File("stores/server-keystore.jks"))) {
+            String password = Files.readString(Path.of("server/stores/keystorePass.txt"), StandardCharsets.UTF_8).trim();
+            try(FileInputStream fis = new FileInputStream(new File("server/stores/server-keystore.jks"))) {
                 ks.load(fis, password.toCharArray());
             }
 
@@ -98,7 +99,7 @@ public class CertHandler {
             //replace the dummy entry in the keystore with this valid one
             ks.setKeyEntry("server", key, password.toCharArray(), chain.toArray(new X509Certificate[0]));
 
-            try (FileOutputStream out = new FileOutputStream("stores/server-keystore.jks")) {
+            try (FileOutputStream out = new FileOutputStream("server/stores/server-keystore.jks")) {
                 ks.store(out, password.toCharArray());
             }
 
@@ -119,106 +120,86 @@ public class CertHandler {
             throw new RuntimeException(e);
         } catch (UnrecoverableKeyException e) {
             throw new RuntimeException(e);
-        }
-
-
-    }
-
-    public static String generateCsr() {
-        try {
-            File outDir = new File("csrTest");
-            outDir.mkdirs();
-
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            KeyPair keyPair = keyGen.generateKeyPair();
-
-            //Setting up the host identifiers - may pass this as configurable strings later
-            String fqdn = InetAddress.getLocalHost().getCanonicalHostName();
-            String hostName = InetAddress.getLocalHost().getHostName();
-
-            //Building the SAN for the CSR: DNS + IP + LocalHost
-            HashSet<GeneralName> san = new HashSet<>();
-            san.add(new GeneralName(GeneralName.dNSName, hostName));
-            san.add(new GeneralName(GeneralName.dNSName, fqdn));
-            san.add(new GeneralName(GeneralName.dNSName, "localhost"));
-            san.add(new GeneralName(GeneralName.iPAddress, "127.0.0.1"));
-
-
-            //Grabbing all the machine's IPs from all interfaces
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            //Iterating through interfaces - not sure how this will play with docker
-            while(interfaces.hasMoreElements()) {
-                NetworkInterface networkInterface = interfaces.nextElement();
-                Enumeration<InetAddress> inetAddresses = networkInterface.getInetAddresses();
-                //Iterating through the addresses on that interface
-                while(inetAddresses.hasMoreElements()) {
-                    InetAddress a = inetAddresses.nextElement();
-                    String ip = a.getHostAddress();
-                    if(ip.contains(".")) { //Filter for IPv4
-                        san.add(new GeneralName(GeneralName.iPAddress, ip));
-                    }
-
-                }
-            }
-
-
-
-            X500Name subject = new X500Name("C=IE,O=Group-H Security,CN=" + fqdn);
-            PKCS10CertificationRequestBuilder builder = new JcaPKCS10CertificationRequestBuilder(subject, keyPair.getPublic());
-            //Build the csr with the collected info in the extension
-
-            // Building the extensions for the csr - extra info for the cer - we need the SAN identity at minimum,
-            // Rest of configuration is for extra security.
-            ExtensionsGenerator extGenerator = new ExtensionsGenerator();
-
-            GeneralNames sanExtension = new GeneralNames(san.toArray(new GeneralName[0]));
-            KeyUsage ku = new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.keyEncipherment);
-            ExtendedKeyUsage eku = new ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth);
-
-
-            extGenerator.addExtension(Extension.subjectAlternativeName, false, sanExtension);
-            extGenerator.addExtension(Extension.keyUsage, true, ku);
-            extGenerator.addExtension(Extension.extendedKeyUsage, true, eku);
-
-            builder.addAttribute(PKCSObjectIdentifiers.pkcs_9_at_extensionRequest, extGenerator.generate());
-
-            // SHA Signer for hashing the cert contents
-            ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(keyPair.getPrivate());
-            PKCS10CertificationRequest csr = builder.build((ContentSigner) signer);
-
-            try(JcaPEMWriter w = new JcaPEMWriter(new FileWriter(new File(outDir, "server.key")))) {
-                w.writeObject(keyPair.getPrivate());
-            }
-            try (StringWriter strWtr = new StringWriter();
-                JcaPEMWriter pemWtr = new JcaPEMWriter(strWtr)) {
-                pemWtr.writeObject(csr);
-                pemWtr.flush();
-                return strWtr.toString();
-            }
-
-
-        }
-
-
-        catch (NoSuchAlgorithmException e) {
-
-        }
-        catch (UnknownHostException uhe) {
-
-        }
-        catch (SocketException se) {
-
-        }
-        catch (IOException ioe) {
-
-        }
-        catch (OperatorCreationException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
-        return null;
+
     }
+
+    public static String generateCsr() throws Exception {
+        // 0) Debug: confirm working dir and keystore files
+        System.out.println("PWD = " + System.getProperty("user.dir"));
+        Path passPath = Path.of("server/stores/keystorePass.txt");
+        Path jksPath  = Path.of("server/stores/server-keystore.jks");
+        if (!Files.exists(passPath)) throw new FileNotFoundException(passPath + " not found");
+        if (!Files.exists(jksPath))  throw new FileNotFoundException(jksPath  + " not found");
+
+        Files.createDirectories(Path.of("csrTest"));
+
+        // 1) Load the SAME keypair your script created (JKS)
+        char[] pass = Files.readString(passPath).trim().toCharArray();
+        KeyStore ks = KeyStore.getInstance("JKS");
+        try (InputStream in = Files.newInputStream(jksPath)) {
+            ks.load(in, pass);
+        }
+
+        String alias = "server";
+        Key key = ks.getKey(alias, pass);
+        if (key == null) throw new KeyStoreException("No private key for alias '" + alias + "'");
+        PrivateKey priv = (PrivateKey) key;
+
+        X509Certificate dummy = (X509Certificate) ks.getCertificate(alias);
+        if (dummy == null) throw new KeyStoreException("No certificate for alias '" + alias + "'");
+        PublicKey pub = dummy.getPublicKey();
+
+        // 2) Subject + SANs (don’t let SAN discovery abort the whole method)
+        String fqdn = InetAddress.getLocalHost().getCanonicalHostName();
+        String host = InetAddress.getLocalHost().getHostName();
+
+        java.util.LinkedHashSet<GeneralName> sans = new java.util.LinkedHashSet<>();
+        sans.add(new GeneralName(GeneralName.dNSName, host));
+        sans.add(new GeneralName(GeneralName.dNSName, fqdn));
+        sans.add(new GeneralName(GeneralName.dNSName, "localhost"));
+        sans.add(new GeneralName(GeneralName.iPAddress, "127.0.0.1"));
+
+        try {
+            Enumeration<NetworkInterface> ifs = NetworkInterface.getNetworkInterfaces();
+            while (ifs.hasMoreElements()) {
+                NetworkInterface nif = ifs.nextElement();
+                Enumeration<InetAddress> addrs = nif.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    String ip = addrs.nextElement().getHostAddress();
+                    if (ip.contains(".")) sans.add(new GeneralName(GeneralName.iPAddress, ip));
+                }
+            }
+        } catch (SocketException se) {
+            System.err.println("WARN: Could not enumerate interfaces: " + se.getMessage());
+            // continue; SAN already has basics
+        }
+
+        X500Name subject = new X500Name("C=IE,O=Group-H Security,CN=" + fqdn);
+        JcaPKCS10CertificationRequestBuilder builder =
+                new JcaPKCS10CertificationRequestBuilder(subject, pub);
+
+        // 3) Proper server extensions (no keyCertSign)
+        ExtensionsGenerator extGen = new ExtensionsGenerator();
+        extGen.addExtension(Extension.subjectAlternativeName, false,
+                new GeneralNames(sans.toArray(new GeneralName[0])));
+        extGen.addExtension(Extension.keyUsage, true,
+                new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment));
+        extGen.addExtension(Extension.extendedKeyUsage, true,
+                new ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth));
+        builder.addAttribute(PKCSObjectIdentifiers.pkcs_9_at_extensionRequest, extGen.generate());
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(priv);
+        PKCS10CertificationRequest csr = builder.build(signer);
+
+        StringWriter sw = new StringWriter();
+        try (JcaPEMWriter w = new JcaPEMWriter(sw)) { w.writeObject(csr); }
+        return sw.toString();
+    }
+
 
     public static void main(String[] args) {
         requestCert("http://127.0.0.1:5000/sign");
