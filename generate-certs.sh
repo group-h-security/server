@@ -75,7 +75,7 @@ echo "=== Step 4: Creating Java Keystores (JKS format) ==="
 # Create server keystore (holds server's private key and certificate)
 # PKCS12 is used as intermediate format
 openssl pkcs12 -export -in server-cert.pem -inkey server-key.pem \
-    -out server-keystore.p12 -name server -password pass:$PASSWORD
+    -out server-keystore.p12 -name server -password pass:$PASSWORDthose
 
 keytool -importkeystore -srckeystore server-keystore.p12 -srcstoretype PKCS12 \
     -destkeystore server-keystore.jks -deststoretype JKS \
