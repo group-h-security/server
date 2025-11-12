@@ -17,11 +17,11 @@ public class Server {
             if (myReader.hasNextLine()) {
                 return myReader.nextLine().trim();
             } else {
-                System.err.println("kspass file is empty: " + keystorePassPath);
+                System.err.println("file is empty: " + keystorePassPath);
                 return null;
             }
         } catch (FileNotFoundException e) {
-            System.err.println("err reading keystore pass: " + keystorePassPath);
+            System.err.println("reading keystore pass: " + keystorePassPath);
             e.printStackTrace();
             return null;
         }

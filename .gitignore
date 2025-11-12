@@ -1,5 +1,4 @@
 stores/
-stores/*
 
 ./deploy.sh
 .gradle/
@@ -8,9 +7,10 @@ gradle/
 
 build/
 
-
 certs/*
-
+!certs/
+!certs/client-truststore.jks
+!certs/truststorePass.txt
 
 stores/*
 !stores/

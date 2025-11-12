@@ -1,8 +1,8 @@
-
 plugins {
     java
     application
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("grouph.make-keystores")
 }
 
 group = "grouph"
@@ -46,20 +46,17 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
     }
 }
 
-
-val runShellScript by tasks.registering(Exec::class) {
-    commandLine("sh", "./buildKeystore.sh")
+val obtainKeystores by tasks.registering {
+    dependsOn("makeKeystores")
 }
 
 val generateCsr by tasks.registering(JavaExec::class) {
-    mainClass.set("grouph.core.CertHandler")
+    mainClass.set("grouph.CsrGenerator")
     classpath = sourceSets["main"].runtimeClasspath
     args = listOf()
-    onlyIf {
-        System.getenv("GENERATE_CSR")?.toBoolean() == true
-    }
-    dependsOn(runShellScript)
+    dependsOn(obtainKeystores)
 }
+
 
 if (System.getenv("GENERATE_CSR")?.toBoolean() == true) {
     tasks.named("build") {
@@ -74,3 +71,4 @@ if (System.getenv("GENERATE_CSR")?.toBoolean() == true) {
         dependsOn(generateCsr)
     }
 }
+
