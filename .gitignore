@@ -7,18 +7,14 @@ gradle/
 
 build/
 
-certs/
-*.jks
-*.pem
-*.p12
-*.crt
-*.key
-*.csr
-*.srl
 
-
+certs/*
 !certs/server-truststore.jks
 
+stores/*
+
+!certs/.gitkeep
+!stores/.gitkeep
 
 # Compiled class file
 *.class
