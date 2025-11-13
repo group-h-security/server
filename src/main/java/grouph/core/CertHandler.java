@@ -10,6 +10,8 @@ import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.*;
 import java.net.*;
 import java.net.http.*;
@@ -29,6 +31,38 @@ public class CertHandler {
     public static void requestClientCert(String CAUrl) {
         requestCert(CAUrl, "client", Path.of("certs/client-keystore.jks"),
             Path.of("certs/keystorePass.txt"), Path.of("certs"));
+    }
+
+    private static SSLContext buildSSLContext(Path truststorePath, String password) {
+        char[] pass = password.toCharArray();
+        try {
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            try(InputStream in = Files.newInputStream(truststorePath)) {
+                trustStore.load(in, pass);
+            }
+            catch (CertificateException | NoSuchAlgorithmException e) {
+                throw new RuntimeException(e);
+            }
+
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, tmf.getTrustManagers(), null);
+
+            return sslContext;
+        }
+        catch (KeyStoreException | IOException e) {
+            throw new RuntimeException(e);
+        }
+        catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+        catch (KeyManagementException e) {
+            throw new RuntimeException(e);
+        }
+
+
     }
 
     public static void requestCert(String CAUrl, String alias, Path keystorePath, Path passPath, Path outDir) {
@@ -66,8 +100,19 @@ public class CertHandler {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
-            HttpClient client = HttpClient.newHttpClient();
 
+            SSLContext sslContext = null;
+            //-O. Injecting HTTPS Here
+            if(alias.equals("client")) {
+                sslContext = buildSSLContext(Path.of("certs", "client-truststore.jks"), "changeit");
+            }
+            else {
+                sslContext = buildSSLContext(Path.of("stores", "server-truststore.jks"), "changeit");
+            }
+
+            HttpClient client = HttpClient.newBuilder()
+                    .sslContext(sslContext)
+                    .build();
             //Get the response
             HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
 
@@ -264,8 +309,8 @@ public class CertHandler {
 
     public static void main(String[] args) {
         try {
-            requestServerCert("http://127.0.0.1:5000/sign");
-            requestClientCert("http://127.0.0.1:5000/sign");
+            requestServerCert("https://127.0.0.1:5000/sign");
+            requestClientCert("https://127.0.0.1:5000/sign");
 
             Path rootCaPath = Path.of("certs/rootCert.crt");
 
