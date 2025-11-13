@@ -83,8 +83,23 @@ public class CertHandler {
                 ks.load(fis, password.toCharArray());
             }
 
+
+
             //Get the private key from the keystore
             Key key = ks.getKey(alias, password.toCharArray());
+
+            if (key instanceof PrivateKey) {
+                System.out.println("Private key algorithm: " + key.getAlgorithm());
+            }
+
+            X509Certificate leaf = (X509Certificate) ks.getCertificate(alias);
+            PublicKey pub = leaf.getPublicKey();
+            System.out.println("Leaf certificate public key algorithm: " + pub.getAlgorithm());
+            if (pub instanceof java.security.interfaces.RSAPublicKey) {
+                System.out.println("RSA key size: " + ((java.security.interfaces.RSAPublicKey) pub).getModulus().bitLength());
+            }
+
+
             //if here for validity
 
             // Parsing the returned PEM into a chain
@@ -103,21 +118,12 @@ public class CertHandler {
             //replace the dummy entry in the keystore with this valid one
             ks.setKeyEntry(alias, key, password.toCharArray(), chain.toArray(new X509Certificate[0]));
 
+
             try (FileOutputStream out = new FileOutputStream(keystorePath.toFile())) {
                 ks.store(out, password.toCharArray());
             }
 
             System.out.println("The keystore has been updated");
-
-            // save ca cert for truststore
-            X509Certificate caCert = chain.get(chain.size() - 1);
-            Path caCertPath = outDir.resolve("ca-cert.pem");
-            StringWriter sw = new StringWriter();
-            try (JcaPEMWriter w = new JcaPEMWriter(sw)) {
-                w.writeObject(caCert);
-            }
-            Files.writeString(caCertPath, sw.toString());
-            System.out.println("ca cert saved" + caCertPath);
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -261,18 +267,20 @@ public class CertHandler {
             requestServerCert("http://127.0.0.1:5000/sign");
             requestClientCert("http://127.0.0.1:5000/sign");
 
+            Path rootCaPath = Path.of("certs/rootCert.crt");
+
             // import ca to server truststore
             importCATruststore(
                 Path.of("stores/server-truststore.jks"),
                 Path.of("stores/keystorePass.txt"),
-                Path.of("certs/ca-cert.pem")
+                rootCaPath
             );
 
             // import ca into client trust store
             importCATruststore(
                 Path.of("certs/client-truststore.jks"),
                 Path.of("certs/keystorePass.txt"),
-                Path.of("certs/ca-cert.pem")
+                rootCaPath
             );
 
             System.out.println("mTLS setup complete, client and server should be able to communicate");

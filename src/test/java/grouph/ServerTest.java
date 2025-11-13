@@ -41,7 +41,8 @@ public class ServerTest {
 
     private static final String CLIENT_KEYSTORE = "certs/client-keystore.jks";
     private static final String CLIENT_TRUSTSTORE = "certs/client-truststore.jks";
-    private static final String PASSWORD = getKeystorePass("certs/keystorePass.txt");
+    private static final String PASSWORD = getKeystorePass("certs/keystorePass.txt"); // TODO: change in prod
+    private static final String TRUSTSTORE_PASSWORD = "changeit";
 
     private static final String HOST = "localhost";
     private static final int PORT = 8443;
@@ -89,7 +90,7 @@ public class ServerTest {
         // load client truststore
         KeyStore trustStore = KeyStore.getInstance("JKS");
         try (FileInputStream fis = new FileInputStream(CLIENT_TRUSTSTORE)) {
-            trustStore.load(fis, PASSWORD.toCharArray());
+            trustStore.load(fis, TRUSTSTORE_PASSWORD.toCharArray());
         }
 
         // verify server cert
