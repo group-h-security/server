@@ -1,3 +1,5 @@
+import java.net.Socket
+import org.gradle.api.tasks.JavaExec
 plugins {
     java
     application
@@ -71,4 +73,3 @@ if (System.getenv("GENERATE_CSR")?.toBoolean() == true) {
         dependsOn(generateCsr)
     }
 }
-
