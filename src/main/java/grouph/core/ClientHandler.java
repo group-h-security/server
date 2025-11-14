@@ -47,19 +47,22 @@ public class ClientHandler implements Runnable {
                         Packets.write(out, Packets.createRoomAck(room.roomId, room.roomCode)); // acknowledge
                     }
                     case Op.JOIN_ROOM -> {
-                        String code = pkt.getStr(T.ROOM_CODE); // get room code from pkt
-                        String username = pkt.getStr(T.USERNAME); // get username from pkt
+                        String code = pkt.getStr(T.ROOM_CODE);
+                        String username = pkt.getStr(T.USERNAME);
+
                         if (username != null && !username.isEmpty()) {
-                            session.username = username; // set username for this session
+                            session.username = username;
                         }
+
                         Room room = registry.getByCode(code);
                         if (room == null) {
                             Packets.write(out, Packets.error(404, "room not found"));
                             break;
                         }
-                        bus.userJoined(room, session.username == null ? "system" : session.username); // broadcast BEFORE adding
-                        attachToRoom(room); // attach user to room requested to join
-                        Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode)); // acknowledge
+
+                        bus.userJoined(room, session.username == null ? "system" : session.username);
+                        attachToRoom(room);
+                        Packets.write(out, Packets.joinRoomAck(room.roomId, room.roomCode));
                     }
                     case Op.CHAT_SEND -> {
                         if (session.roomId == null) { // user must be in room to send message
@@ -78,23 +81,9 @@ public class ClientHandler implements Runnable {
                         // if no username just use anon
                         bus.chat(r, session.username == null ? "anon" : session.username, pkt.getStr(T.MESSAGE));
                     }
-                    case Op.LEAVE -> {
-                        detachFromRoom();
-                        Packets.write(out, Packets.leave());
-                        running = false;
-                    }
                     case Op.SET_USERNAME -> {
                         session.username = pkt.getStr(T.USERNAME);
                         Packets.write(out, Packets.setUsernameAck(session.username));
-                    }
-                    case Op.GET_LOGS -> {
-                        if(session.roomId == null) {
-                            Packets.write(out, Packets.error(400, "not in room"));
-                        }
-                        Room r = registry.getById(session.roomId);
-                        DataManager dataManager = new DataManager(r);
-                        String logs = dataManager.getLogs();
-                        Packets.write(out, Packets.getLogsAck(logs));
                     }
                     default -> {
                         Packets.write(out, Packets.error(400, "unknown opcode"));
