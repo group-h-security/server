@@ -74,7 +74,7 @@ public class Server {
             // load server truststore
             KeyStore trustStore = KeyStore.getInstance("JKS");
             try(FileInputStream trustStoreFile = new FileInputStream(TRUSTSTORE_PATH)) {
-                trustStore.load(trustStoreFile, PASSWORD.toCharArray());
+                trustStore.load(trustStoreFile, "changeit".toCharArray());
             }
             System.out.println("loaded server trust store (trusted clients)");
 
