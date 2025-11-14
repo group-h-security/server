@@ -7,6 +7,7 @@ COPY . .
 COPY certs/ ./certs/
 
 # Build the fat JAR using Shadow plugin
+ENV GENERATE_CSR=true
 RUN ./gradlew shadowJar --no-daemon
 
 # Runtime stage
@@ -15,6 +16,8 @@ WORKDIR /app
 
 # Copy the fat JAR from build stage
 COPY --from=build /app/build/libs/server-1.0-SNAPSHOT-all.jar ./myserver.jar
+COPY --from=build /app/certs ./certs
+COPY --from=build /app/stores ./stores
 
 # Copy certs from build stage
 COPY --from=build /app/certs ./certs

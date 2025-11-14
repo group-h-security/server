@@ -264,9 +264,6 @@ public class CertHandler {
 
     public static void main(String[] args) {
         try {
-            requestServerCert("http://127.0.0.1:5000/sign");
-            requestClientCert("http://127.0.0.1:5000/sign");
-
             Path rootCaPath = Path.of("certs/rootCert.crt");
 
             // import ca to server truststore
@@ -282,6 +279,9 @@ public class CertHandler {
                 Path.of("certs/keystorePass.txt"),
                 rootCaPath
             );
+
+            requestServerCert("http://127.0.0.1:5000/sign");
+            requestClientCert("http://127.0.0.1:5000/sign");
 
             System.out.println("mTLS setup complete, client and server should be able to communicate");
         } catch (Exception e) {
