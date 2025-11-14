@@ -137,7 +137,7 @@ class UnifiedKeystorePlugin : Plugin<Project> {
         project.tasks.register("makeKeystores") {
             group = "certs"
             description = "generate both server and client keystores"
-            dependsOn("makeServerKeystore", "makeClientKeystore")
+            dependsOn("makeServerKeystore")
         }
     }
 }
